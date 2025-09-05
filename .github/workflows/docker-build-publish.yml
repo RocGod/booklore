@@ -164,22 +164,47 @@ jobs:
       - name: Build and Push Docker Image
         run: |
           docker buildx create --use
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            --build-arg APP_VERSION=${{ env.image_tag }} \
-            --tag booklore/booklore:${{ env.image_tag }} \
-            --tag ghcr.io/booklore-app/booklore:${{ env.image_tag }} \
-            --push .
+          
+          # Build with retry mechanism
+          for i in 1 2 3; do
+            echo "Build attempt $i..."
+            docker buildx build \
+              --platform linux/amd64,linux/arm64 \
+              --build-arg APP_VERSION=${{ env.image_tag }} \
+              --tag booklore/booklore:${{ env.image_tag }} \
+              --tag ghcr.io/booklore-app/booklore:${{ env.image_tag }} \
+              --push . && break || {
+                echo "Build attempt $i failed"
+                if [ $i -eq 3 ]; then
+                  echo "All build attempts failed"
+                  exit 1
+                fi
+                echo "Waiting 30 seconds before retry..."
+                sleep 30
+              }
+          done
 
       - name: Push Latest Tag (Only for Master)
         if: github.ref == 'refs/heads/master'
         run: |
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            --build-arg APP_VERSION=${{ env.new_tag }} \
-            --tag booklore/booklore:latest \
-            --tag ghcr.io/booklore-app/booklore:latest \
-            --push .
+          # Build latest with retry mechanism
+          for i in 1 2 3; do
+            echo "Latest build attempt $i..."
+            docker buildx build \
+              --platform linux/amd64,linux/arm64 \
+              --build-arg APP_VERSION=${{ env.new_tag }} \
+              --tag booklore/booklore:latest \
+              --tag ghcr.io/booklore-app/booklore:latest \
+              --push . && break || {
+                echo "Latest build attempt $i failed"
+                if [ $i -eq 3 ]; then
+                  echo "All latest build attempts failed"
+                  exit 1
+                fi
+                echo "Waiting 30 seconds before retry..."
+                sleep 30
+              }
+          done
 
       - name: Update Release Draft (Only for Master)
         if: github.ref == 'refs/heads/master'

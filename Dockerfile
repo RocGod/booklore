@@ -3,8 +3,23 @@ FROM node:22-alpine AS angular-build
 
 WORKDIR /angular-app
 
+# Configure npm for better network handling
+RUN npm config set fetch-timeout 300000 && \
+    npm config set fetch-retry-maxtimeout 300000 && \
+    npm config set fetch-retry-mintimeout 10000 && \
+    npm config set fetch-retries 5
+
 COPY ./booklore-ui/package.json ./booklore-ui/package-lock.json ./
-RUN npm install --force
+
+# Install with retry mechanism
+RUN for i in 1 2 3; do \
+      npm install --force --verbose && break || \
+      (echo "Attempt $i failed, retrying in 10 seconds..." && sleep 10); \
+    done && \
+    if [ ! -d "node_modules" ]; then \
+      echo "All npm install attempts failed" && exit 1; \
+    fi
+
 COPY ./booklore-ui /angular-app/
 
 RUN npm run build --configuration=production
